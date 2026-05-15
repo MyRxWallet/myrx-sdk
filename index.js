@@ -8,7 +8,7 @@ const DEFAULT_RPC = 'https://rpc.myrxwallet.io';
 const ADDRESSES = {
   WMRT:      '0x00e69754c21090d69d29a2abe3b6cf153d3f1df7',
   WBTC:      '0xc8604c8fcf96cec581e8275a2cdf04e7f7348849',
-  MUSD:      '0xddCA7ac61e820744799397944486156bB009a1C1',
+  MUSD:      '0x8d86EA71F0621ffb47A5a40ab92409A022Dd30F7',
   Router:    '0xe0eab9309910f7e0e60fc637af50b38a4b34ad2b',
   Factory:   '0x7e4a7cc7d9e4e416e7277f8309cc54cf5fd8af2b',
   Bridge:    '0xc9be40494ef767a8760682d93de014e825bdb3e8',
