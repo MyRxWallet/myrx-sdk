@@ -5,11 +5,14 @@ const CHAIN_ID = 8472;
 const DEFAULT_RPC = 'https://rpc.myrxwallet.io';
 
 const ADDRESSES = {
-  WMRT:    '0x00e69754c21090d69d29a2abe3b6cf153d3f1df7',
-  WBTC:    '0xc8604c8fcf96cec581e8275a2cdf04e7f7348849',
-  Router:  '0xe0eab9309910f7e0e60fc637af50b38a4b34ad2b',
-  Factory: '0x7e4a7cc7d9e4e416e7277f8309cc54cf5fd8af2b',
-  Bridge:  '0xc9be40494ef767a8760682d93de014e825bdb3e8',
+  WMRT:           '0x00e69754c21090d69d29a2abe3b6cf153d3f1df7',
+  WBTC:           '0xc8604c8fcf96cec581e8275a2cdf04e7f7348849',
+  MUSD:           '0xddca7ac61e820744799397944486156bb009a1c1',
+  Router:         '0xe0eab9309910f7e0e60fc637af50b38a4b34ad2b',
+  Factory:        '0x7e4a7cc7d9e4e416e7277f8309cc54cf5fd8af2b',
+  Bridge:         '0xc9be40494ef767a8760682d93de014e825bdb3e8',
+  WMRT_WBTC_Pair: '0x16bf6e74b9fee4306a7d268468fc4d45c2f4b0c3',
+  WMRT_MUSD_Pair: '0xf1946991ea67cdbb8d74b3124003d55a2069bd2e',
 };
 
 const ABI = {
@@ -17,7 +20,7 @@ const ABI = {
   Router:  ['function swapExactTokensForTokens(uint256,uint256,uint256[],address) returns (uint256[])','function addLiquidity(address,address,uint256,uint256,uint256,uint256,address) returns (uint256,uint256,uint256)','function factory() view returns (address)'],
   Factory: ['function getPair(address,address) view returns (address)','function allPairsLength() view returns (uint256)'],
   Pair:    ['function getReserves() view returns (uint112,uint112,uint32)','function token0() view returns (address)','function token1() view returns (address)'],
-  Bridge:  ['function dailyMintCap() view returns (uint256)','function minRedemption() view returns (uint256)','function custodyBtcAddr() view returns (string)','function initiateRedemption(uint256,string)'],
+  Bridge:  ['function dailyMintCap() view returns (uint256)','function minRedemption() view returns (uint256)','function custodyBTCAddress() view returns (string)','function initiateRedemption(uint256,string)'],
 };
 
 class MyrxSDK {
@@ -59,6 +62,11 @@ class MyrxSDK {
     return parseInt(await this._rpc('eth_call', [{ to: ADDRESSES.WBTC, data }, 'latest']), 16);
   }
 
+  async getMUSDBalance(address) {
+    const data = '0x70a08231' + address.slice(2).padStart(64, '0');
+    return parseInt(await this._rpc('eth_call', [{ to: ADDRESSES.MUSD, data }, 'latest']), 16);
+  }
+
   async getPrice(fromSymbol, toSymbol) {
     const [a, b] = [ADDRESSES[fromSymbol], ADDRESSES[toSymbol]];
     if (!a || !b) throw new Error('Unknown token');
@@ -72,6 +80,17 @@ class MyrxSDK {
     const r0 = BigInt('0x' + raw.slice(2, 66));
     const r1 = BigInt('0x' + raw.slice(66, 130));
     return r1 > 0n ? Number(r0 * 10000n / r1) / 10000 : null;
+  }
+
+  async getUSDPrice() {
+    const raw = await this._rpc('eth_call', [{ to: ADDRESSES.WMRT_MUSD_Pair, data: '0x0902f1ac' }, 'latest']);
+    const tok0Raw = await this._rpc('eth_call', [{ to: ADDRESSES.WMRT_MUSD_Pair, data: '0x0dfe1681' }, 'latest']);
+    const tok0 = ('0x' + tok0Raw.slice(-40)).toLowerCase();
+    const r0 = BigInt('0x' + raw.slice(2, 66));
+    const r1 = BigInt('0x' + raw.slice(66, 130));
+    const [wmrtR, musdR] = tok0 === ADDRESSES.WMRT ? [r0, r1] : [r1, r0];
+    if (wmrtR === 0n) return null;
+    return Number(musdR * 10000000000n / wmrtR) / 100;
   }
 
   async swap({ from, to, amount, slippage = 0.005 }) {
@@ -95,8 +114,8 @@ class MyrxSDK {
   async getBridgeInfo() {
     const { ethers } = await import('ethers');
     const bridge = new ethers.Contract(ADDRESSES.Bridge, ABI.Bridge, new ethers.JsonRpcProvider(this._rpcUrl));
-    const [cap, min, custody] = await Promise.all([bridge.dailyMintCap(), bridge.minRedemption(), bridge.custodyBtcAddr()]);
-    return { dailyMintCap: cap.toString(), minRedemption: min.toString(), custodyBtcAddr: custody };
+    const [cap, min, custody] = await Promise.all([bridge.dailyMintCap(), bridge.minRedemption(), bridge.custodyBTCAddress()]);
+    return { dailyMintCap: cap.toString(), minRedemption: min.toString(), custodyBTCAddress: custody };
   }
 }
 
