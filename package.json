@@ -1,1 +1,24 @@
-{"name":"@myrx/sdk","version":"1.1.0","description":"JavaScript SDK for MYRX-MAINNET (Chain ID 8472)","main":"index.js","license":"MIT","keywords":["myrx","myrxwallet","blockchain","defi","stablecoin"],"repository":{"type":"git","url":"https://github.com/MyRxWallet/myrx-sdk"},"peerDependencies":{"ethers":">=6.0.0"}}
+{
+  "name": "@myrx/sdk",
+  "version": "1.1.1",
+  "description": "JavaScript SDK for MYRX-MAINNET (Chain 8472) \u2014 healthcare-native blockchain rails",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MyRxWallet/myrx-sdk"
+  },
+  "keywords": [
+    "myrx",
+    "blockchain",
+    "evm",
+    "defi",
+    "healthcare",
+    "wbtc",
+    "bridge"
+  ],
+  "author": "MyRxWallet North America Corporation",
+  "license": "MIT",
+  "peerDependencies": {
+    "ethers": "^6.0.0"
+  }
+}
