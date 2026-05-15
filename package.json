@@ -1,0 +1,21 @@
+{
+  "name": "@myrx/sdk",
+  "version": "0.1.0",
+  "description": "JavaScript SDK for MYRX-MAINNET Chain 8472 — connect wallet, swap, bridge, query",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+  },
+  "keywords": ["myrx", "myrxwallet", "blockchain", "defi", "chain-8472", "wbtc", "bridge"],
+  "author": "MyRxWallet North America Corporation",
+  "license": "MIT",
+  "peerDependencies": {
+    "ethers": "^6.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MyRxWallet/myrx-sdk.git"
+  },
+  "homepage": "https://myrxwallet.io"
+}
