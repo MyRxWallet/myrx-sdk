@@ -1,202 +1,104 @@
-/**
- * @myrx/sdk — JavaScript SDK for MYRX-MAINNET (Chain 8472)
- * Wraps ethers.js v6 for wallet connect, swap, bridge, and balance queries.
- */
+// @myrx/sdk — MYRX-MAINNET Chain 8472 JavaScript SDK
+// MIT License — MyRxWallet North America Corporation
 
-import { ethers } from 'ethers';
+const CHAIN_ID = 8472;
+const DEFAULT_RPC = 'https://rpc.myrxwallet.io';
 
-export const CHAIN_ID  = 8472;
-export const RPC_URL   = 'https://rpc.myrxwallet.io';
-export const CHAIN_HEX = '0x2118';
-
-export const ADDRESSES = {
-  WMRT:       '0x5A08434f87c8189F31b9FFDeA7CF64e5704691fc',
-  WBTC:       '0x0602D45DF10436bA26Aa4FD0e8f5baA60b1BE0D1',
-  DEX_ROUTER: '0x5Bde6072B6C4443BC993bb1cDD4f311383739c41',
-  DEX_FACTORY:'0x83995Ac39CED53a93E77Ab5d194E43D47e076b34',
-  BRIDGE:     '0x8f650C43A1e94c29Ed038C0F19458FbE42A68d05',
+const ADDRESSES = {
+  WMRT:    '0x00e69754c21090d69d29a2abe3b6cf153d3f1df7',
+  WBTC:    '0xc8604c8fcf96cec581e8275a2cdf04e7f7348849',
+  Router:  '0xe0eab9309910f7e0e60fc637af50b38a4b34ad2b',
+  Factory: '0x7e4a7cc7d9e4e416e7277f8309cc54cf5fd8af2b',
+  Bridge:  '0xc9be40494ef767a8760682d93de014e825bdb3e8',
 };
 
-const ERC20_ABI = [
-  'function balanceOf(address) view returns (uint256)',
-  'function allowance(address,address) view returns (uint256)',
-  'function approve(address,uint256) returns (bool)',
-  'function decimals() view returns (uint8)',
-  'function totalSupply() view returns (uint256)',
-];
+const ABI = {
+  ERC20:   ['function balanceOf(address) view returns (uint256)','function approve(address,uint256) returns (bool)','function transfer(address,uint256) returns (bool)','function totalSupply() view returns (uint256)','function decimals() view returns (uint8)'],
+  Router:  ['function swapExactTokensForTokens(uint256,uint256,uint256[],address) returns (uint256[])','function addLiquidity(address,address,uint256,uint256,uint256,uint256,address) returns (uint256,uint256,uint256)','function factory() view returns (address)'],
+  Factory: ['function getPair(address,address) view returns (address)','function allPairsLength() view returns (uint256)'],
+  Pair:    ['function getReserves() view returns (uint112,uint112,uint32)','function token0() view returns (address)','function token1() view returns (address)'],
+  Bridge:  ['function dailyMintCap() view returns (uint256)','function minRedemption() view returns (uint256)','function custodyBtcAddr() view returns (string)','function initiateRedemption(uint256,string)'],
+};
 
-const ROUTER_ABI = [
-  'function swapExactTokensForTokens(uint256 amtIn, uint256 amtOutMin, address[] path, address to) returns (uint256[] amounts)',
-  'function factory() view returns (address)',
-];
-
-const FACTORY_ABI = [
-  'function getPair(address,address) view returns (address)',
-  'function allPairsLength() view returns (uint256)',
-];
-
-const PAIR_ABI = [
-  'function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)',
-  'function token0() view returns (address)',
-  'function token1() view returns (address)',
-];
-
-const BRIDGE_ABI = [
-  'function initiateWithdrawal(uint256 amountSatoshis, string btcDestAddress)',
-  'function paused() view returns (bool)',
-  'function dailyCap() view returns (uint256)',
-  'event Withdrawal(address indexed sender, uint256 amount, string btcDestAddress)',
-];
-
-export class MyrxSDK {
-  constructor({ rpc = RPC_URL } = {}) {
-    this.rpc = rpc;
-    this.provider = new ethers.JsonRpcProvider(rpc);
-    this.signer = null;
-    this.address = null;
+class MyrxSDK {
+  constructor({ rpc } = {}) {
+    if (typeof rpc === 'string' && !rpc.startsWith('https://'))
+      throw new Error('MyrxSDK: HTTPS RPC required in production');
+    this._rpcUrl = rpc || DEFAULT_RPC;
+    this._signer = null;
   }
 
-  /**
-   * Connect MetaMask. Auto-adds Chain 8472 if not already in wallet.
-   * @returns {string} connected wallet address
-   */
-  async connect() {
-    if (!window?.ethereum) throw new Error('MetaMask not detected');
-    await window.ethereum.request({ method: 'eth_requestAccounts' });
-    const browserProvider = new ethers.BrowserProvider(window.ethereum);
-    const network = await browserProvider.getNetwork();
-    if (Number(network.chainId) !== CHAIN_ID) {
-      try {
-        await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN_HEX }] });
-      } catch (e) {
-        if (e.code === 4902) {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: CHAIN_HEX,
-              chainName: 'MyrxWallet Network',
-              nativeCurrency: { name: 'MRT', symbol: 'MRT', decimals: 18 },
-              rpcUrls: [RPC_URL],
-              blockExplorerUrls: ['https://explorer.myrxwallet.io'],
-            }],
-          });
-        } else throw e;
-      }
-    }
-    const signerProvider = new ethers.BrowserProvider(window.ethereum);
-    this.signer = await signerProvider.getSigner();
-    this.address = await this.signer.getAddress();
-    return this.address;
+  async _rpc(method, params = []) {
+    const res = await fetch(this._rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return data.result;
   }
 
-  /**
-   * Get native MRT balance for an address.
-   * @param {string} address
-   * @returns {string} balance in MRT (formatted)
-   */
+  async connect(provider) {
+    const net = await provider.getNetwork();
+    if (Number(net.chainId) !== CHAIN_ID)
+      throw new Error(`MyrxSDK: wrong chain — expected ${CHAIN_ID}, got ${net.chainId}`);
+    this._signer = await provider.getSigner();
+    return this._signer;
+  }
+
+  async getBlockNumber() { return parseInt(await this._rpc('eth_blockNumber'), 16); }
+
   async getBalance(address) {
-    const bal = await this.provider.getBalance(address || this.address);
-    return ethers.formatEther(bal);
+    const raw = await this._rpc('eth_getBalance', [address, 'latest']);
+    return Number(BigInt(raw) * 1000n / BigInt(1e15)) / 1000;
   }
 
-  /**
-   * Get ERC-20 token balance.
-   * @param {string} tokenAddress — use ADDRESSES.WMRT or ADDRESSES.WBTC
-   * @param {string} [holder]
-   * @returns {string} formatted balance
-   */
-  async getTokenBalance(tokenAddress, holder) {
-    const addr = holder || this.address;
-    if (!addr) throw new Error('No address — connect wallet first');
-    const token = new ethers.Contract(tokenAddress, ERC20_ABI, this.provider);
-    const [bal, dec] = await Promise.all([token.balanceOf(addr), token.decimals()]);
-    return ethers.formatUnits(bal, dec);
+  async getWBTCBalance(address) {
+    const data = '0x70a08231' + address.slice(2).padStart(64, '0');
+    return parseInt(await this._rpc('eth_call', [{ to: ADDRESSES.WBTC, data }, 'latest']), 16);
   }
 
-  /**
-   * Get current DEX price for a token pair.
-   * @param {'WMRT'|'WBTC'} from
-   * @param {'WMRT'|'WBTC'} to
-   * @returns {{ rate: string, reserve0: string, reserve1: string }}
-   */
-  async getPrice(from, to) {
-    const pair = await this._getPair(ADDRESSES[from], ADDRESSES[to]);
-    if (pair === ethers.ZeroAddress) throw new Error('No liquidity pair');
-    const pairContract = new ethers.Contract(pair, PAIR_ABI, this.provider);
-    const [res, t0] = await Promise.all([pairContract.getReserves(), pairContract.token0()]);
-    const isFromT0 = t0.toLowerCase() === ADDRESSES[from].toLowerCase();
-    const [r0, r1] = isFromT0 ? [res[0], res[1]] : [res[1], res[0]];
-    const dec0 = from === 'WMRT' ? 18 : 8;
-    const dec1 = to   === 'WMRT' ? 18 : 8;
-    const rate = (Number(ethers.formatUnits(r1, dec1)) / Number(ethers.formatUnits(r0, dec0))).toFixed(8);
-    return {
-      rate,
-      [`reserve_${from.toLowerCase()}`]: ethers.formatUnits(r0, dec0),
-      [`reserve_${to.toLowerCase()}`]:   ethers.formatUnits(r1, dec1),
-    };
+  async getPrice(fromSymbol, toSymbol) {
+    const [a, b] = [ADDRESSES[fromSymbol], ADDRESSES[toSymbol]];
+    if (!a || !b) throw new Error('Unknown token');
+    const pairRaw = await this._rpc('eth_call', [{
+      to: ADDRESSES.Factory,
+      data: '0xe6a43905' + a.slice(2).padStart(64,'0') + b.slice(2).padStart(64,'0')
+    }, 'latest']);
+    const pairAddr = '0x' + pairRaw.slice(26);
+    if (pairAddr === '0x' + '0'.repeat(40)) return null;
+    const raw = await this._rpc('eth_call', [{ to: pairAddr, data: '0x0902f1ac' }, 'latest']);
+    const r0 = BigInt('0x' + raw.slice(2, 66));
+    const r1 = BigInt('0x' + raw.slice(66, 130));
+    return r1 > 0n ? Number(r0 * 10000n / r1) / 10000 : null;
   }
 
-  /**
-   * Swap tokens via MyrxSwap DEX.
-   * @param {{ from: 'WMRT'|'WBTC', to: 'WMRT'|'WBTC', amount: string, slippagePct?: number }} opts
-   * @returns {ethers.TransactionReceipt}
-   */
-  async swap({ from, to, amount, slippagePct = 0.5 }) {
-    if (!this.signer) throw new Error('Not connected — call connect() first');
-    const tokenIn  = ADDRESSES[from];
-    const tokenOut = ADDRESSES[to];
-    const decIn    = from === 'WMRT' ? 18 : 8;
-    const decOut   = to   === 'WMRT' ? 18 : 8;
-    const amtIn    = ethers.parseUnits(amount, decIn);
-
-    const price    = await this.getPrice(from, to);
-    const estOut   = parseFloat(amount) * parseFloat(price.rate);
-    const minOut   = ethers.parseUnits((estOut * (1 - slippagePct / 100)).toFixed(decOut), decOut);
-
-    const token  = new ethers.Contract(tokenIn, ERC20_ABI, this.signer);
-    const router = new ethers.Contract(ADDRESSES.DEX_ROUTER, ROUTER_ABI, this.signer);
-
-    const allowance = await token.allowance(this.address, ADDRESSES.DEX_ROUTER);
-    if (allowance < amtIn) {
-      const approveTx = await token.approve(ADDRESSES.DEX_ROUTER, amtIn);
-      await approveTx.wait();
-    }
-
-    const tx = await router.swapExactTokensForTokens(amtIn, minOut, [tokenIn, tokenOut], this.address);
-    return tx.wait();
+  async swap({ from, to, amount, slippage = 0.005 }) {
+    if (!this._signer) throw new Error('Call connect() first');
+    const { ethers } = await import('ethers');
+    const router = new ethers.Contract(ADDRESSES.Router, ABI.Router, this._signer);
+    await new ethers.Contract(ADDRESSES[from], ABI.ERC20, this._signer).approve(ADDRESSES.Router, amount);
+    const minOut = BigInt(Math.floor(Number(amount) * (1 - slippage)));
+    return router.swapExactTokensForTokens(amount, minOut, [ADDRESSES[from], ADDRESSES[to]], await this._signer.getAddress());
   }
 
-  /**
-   * Initiate a BTC withdrawal (peg-out). Burns WBTC on-chain; relayer releases BTC.
-   * @param {{ satoshis: number, btcAddress: string }} opts
-   * @returns {ethers.TransactionReceipt}
-   */
-  async withdrawBTC({ satoshis, btcAddress }) {
-    if (!this.signer) throw new Error('Not connected — call connect() first');
-    const bridge = new ethers.Contract(ADDRESSES.BRIDGE, BRIDGE_ABI, this.signer);
-    const wbtc   = new ethers.Contract(ADDRESSES.WBTC, ERC20_ABI, this.signer);
-
-    const allowance = await wbtc.allowance(this.address, ADDRESSES.BRIDGE);
-    if (allowance < BigInt(satoshis)) {
-      const approveTx = await wbtc.approve(ADDRESSES.BRIDGE, BigInt(satoshis));
-      await approveTx.wait();
-    }
-
-    const tx = await bridge.initiateWithdrawal(BigInt(satoshis), btcAddress);
-    return tx.wait();
+  async addLiquidity({ tokenA, tokenB, amountA, amountB }) {
+    if (!this._signer) throw new Error('Call connect() first');
+    const { ethers } = await import('ethers');
+    const router = new ethers.Contract(ADDRESSES.Router, ABI.Router, this._signer);
+    await new ethers.Contract(ADDRESSES[tokenA], ABI.ERC20, this._signer).approve(ADDRESSES.Router, amountA);
+    await new ethers.Contract(ADDRESSES[tokenB], ABI.ERC20, this._signer).approve(ADDRESSES.Router, amountB);
+    return router.addLiquidity(ADDRESSES[tokenA], ADDRESSES[tokenB], amountA, amountB, 0, 0, await this._signer.getAddress());
   }
 
-  /**
-   * Get current chain block number.
-   */
-  async getBlockNumber() {
-    return this.provider.getBlockNumber();
-  }
-
-  async _getPair(tokenA, tokenB) {
-    const factory = new ethers.Contract(ADDRESSES.DEX_FACTORY, FACTORY_ABI, this.provider);
-    return factory.getPair(tokenA, tokenB);
+  async getBridgeInfo() {
+    const { ethers } = await import('ethers');
+    const bridge = new ethers.Contract(ADDRESSES.Bridge, ABI.Bridge, new ethers.JsonRpcProvider(this._rpcUrl));
+    const [cap, min, custody] = await Promise.all([bridge.dailyMintCap(), bridge.minRedemption(), bridge.custodyBtcAddr()]);
+    return { dailyMintCap: cap.toString(), minRedemption: min.toString(), custodyBtcAddr: custody };
   }
 }
 
-export default MyrxSDK;
+if (typeof module !== 'undefined') module.exports = { MyrxSDK, ADDRESSES, CHAIN_ID };
+if (typeof window !== 'undefined') window.MyrxSDK = MyrxSDK;
