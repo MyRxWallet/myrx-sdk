@@ -1,24 +1,56 @@
 {
-  "name": "@myrx/sdk",
-  "version": "1.1.2",
-  "description": "JavaScript SDK for MYRX-MAINNET (Chain 8472) \u2014 healthcare-native blockchain rails",
-  "main": "index.js",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/MyRxWallet/myrx-sdk"
+  "name": "@myrxwallet/sdk",
+  "version": "1.0.0",
+  "description": "Official SDK for Chain 8472 (MyRx Chain) — MRT Token, FHIR R4 Health API, Multi-chain Bridge. Purpose-built for federally-mandated patient health infrastructure under the 21st Century Cures Act.",
+  "main": "src/index.js",
+  "types": "types/index.d.ts",
+  "files": [
+    "src/",
+    "types/",
+    "examples/",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node examples/quickstart.js",
+    "test": "node examples/quickstart.js"
   },
   "keywords": [
-    "myrx",
+    "myrxwallet",
+    "chain-8472",
+    "mrt-token",
+    "healthcare",
+    "fhir",
+    "fhir-r4",
+    "smart-on-fhir",
+    "hipaa",
     "blockchain",
     "evm",
-    "defi",
-    "healthcare",
-    "wbtc",
-    "bridge"
+    "web3",
+    "ethereum",
+    "21st-century-cures-act",
+    "onc",
+    "bridge",
+    "validator"
   ],
-  "author": "MyRxWallet North America Corporation",
-  "license": "MIT",
+  "author": "MyRxWallet North America Corporation <info@myrxwallet.io>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MyRxWallet/myrx-sdk.git"
+  },
+  "homepage": "https://myrxwallet.io/developer.html",
+  "bugs": {
+    "url": "https://github.com/MyRxWallet/myrx-sdk/issues"
+  },
   "peerDependencies": {
     "ethers": "^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ethers": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
