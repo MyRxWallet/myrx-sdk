@@ -1,57 +1,173 @@
-# @myrx/sdk
+# @myrxwallet/sdk
 
-JavaScript SDK for MYRX-MAINNET (Chain ID 8472).
+Official SDK for **Chain 8472 (MyRx Chain)** — the EVM-compatible blockchain securing patient health data under the 21st Century Cures Act.
 
-## Install
+[![npm version](https://img.shields.io/npm/v/@myrxwallet/sdk)](https://www.npmjs.com/package/@myrxwallet/sdk)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Chain 8472](https://img.shields.io/badge/Chain-8472-7c3aed)](https://explorer.myrxwallet.io)
+[![FHIR R4](https://img.shields.io/badge/FHIR-R4-00d5d5)](https://ehr.myrxwallet.io/api/v1/fhir/r4/metadata)
+
+## Installation
 
 ```bash
-npm install @myrx/sdk ethers
+npm install @myrxwallet/sdk
+# Optional: ERC-20 + bridge operations require ethers v6
+npm install ethers
 ```
 
-## Usage
+## Chain 8472 Quick Connect
 
 ```javascript
-import { MyrxSDK } from '@myrx/sdk';
+const { Chain8472Provider, CHAIN_8472 } = require('@myrxwallet/sdk');
 
-const sdk = new MyrxSDK({ rpc: 'https://rpc.myrxwallet.io' });
+const provider = new Chain8472Provider();
+const block = await provider.getBlockNumber();
+const balanceMRT = await provider.getBalanceMRT('0xYourAddress');
 
-const block    = await sdk.getBlockNumber();
-const bal      = await sdk.getBalance('0xYourAddress');      // MRT
-const wbtc     = await sdk.getWBTCBalance('0xYourAddress');  // satoshis
-const musd     = await sdk.getMUSDBalance('0xYourAddress');  // MUSD units (8 dec)
-const btcPrice = await sdk.getPrice('WMRT', 'WBTC');         // WBTC per WMRT
-const usdPrice = await sdk.getUSDPrice();                    // USD per WMRT
-
-// Write (requires wallet)
-await sdk.connect(window.ethereum);
-await sdk.swap({ from: 'WMRT', to: 'WBTC', amount: '1000000000000000000', slippage: 0.01 });
-await sdk.swap({ from: 'WMRT', to: 'MUSD', amount: '1000000000000000000', slippage: 0.01 });
-await sdk.addLiquidity({ tokenA: 'WMRT', tokenB: 'MUSD', amountA: '1000000000000000000', amountB: '452000000000' });
-const bridge = await sdk.getBridgeInfo();
+console.log(`Chain ${CHAIN_8472.chainId} — block ${block}`);
+console.log(`MRT balance: ${balanceMRT}`);
 ```
 
-## Contract Addresses
+**RPC:** `https://rpc.myrxwallet.io`  
+**Chain ID:** `8472`  
+**Explorer:** `https://explorer.myrxwallet.io`  
+**Native Token:** MRT (MyRxWallet Reward Token, 18 decimals)
 
-| Contract | Address |
-|---|---|
-| WMRT | 0x00e69754c21090d69d29a2abe3b6cf153d3f1df7 |
-| WBTC | 0xc8604c8fcf96cec581e8275a2cdf04e7f7348849 |
-| MUSD | 0xddca7ac61e820744799397944486156bb009a1c1 |
-| Router | 0xe0eab9309910f7e0e60fc637af50b38a4b34ad2b |
-| Factory | 0x7e4a7cc7d9e4e416e7277f8309cc54cf5fd8af2b |
-| Bridge | 0xc9be40494ef767a8760682d93de014e825bdb3e8 |
-| WMRT/WBTC Pair | 0x16bf6e74b9fee4306a7d268468fc4d45c2f4b0c3 |
-| WMRT/MUSD Pair | 0xf1946991ea67cdbb8d74b3124003d55a2069bd2e |
+Add to MetaMask / any EVM wallet:
 
-## Chain Info
+```json
+{
+  "chainId": "0x2118",
+  "chainName": "MyRx Chain",
+  "rpcUrls": ["https://rpc.myrxwallet.io"],
+  "nativeCurrency": { "name": "MyRx Token", "symbol": "MRT", "decimals": 18 },
+  "blockExplorerUrls": ["https://explorer.myrxwallet.io"]
+}
+```
 
-| Field | Value |
-|---|---|
-| Chain ID | 8472 |
-| RPC | https://rpc.myrxwallet.io |
-| WSS | wss://rpc.myrxwallet.io |
-| Explorer | https://explorer.myrxwallet.io |
-| Swap DEX | https://swap.myrxwallet.io |
+## MRT Token
+
+```javascript
+const { MRTToken, CONTRACTS_8472 } = require('@myrxwallet/sdk');
+
+const mrt = new MRTToken();
+
+// Get token metadata
+const meta = await mrt.metadata();
+// { name: 'Wrapped MRT', symbol: 'wMRT', decimals: 18, totalSupply: '...' }
+
+// Check balance
+const balance = await mrt.balanceOf('0xYourAddress');
+
+// Transfer MRT
+const receipt = await mrt.transfer(privateKey, recipientAddress, '10.0');
+
+// Approve bridge
+await mrt.approve(privateKey, BRIDGE_CONTRACT_ADDRESS, '100.0');
+```
+
+**Wrapped MRT:** `0x00e69754c21090d69D29a2abe3B6CF153D3F1dF7`  
+**Regulatory note:** MRT rewards are infrastructure compensation — not investment yield. [Full regulatory analysis →](https://myrxwallet.io/compliance.html#staking-validators)
+
+## Multi-chain Bridge
+
+MRT is live across 5 EVM networks via MRTBridgeMint contracts.
+
+```javascript
+const { MRTBridge } = require('@myrxwallet/sdk');
+
+// List supported chains
+const chains = MRTBridge.supportedChains();
+// [{ chainId: 8453, name: 'Base', role: 'Primary bridge hub' }, ...]
+
+// Bridge MRT from Base → Chain 8472
+const bridge = new MRTBridge(BRIDGE_CONTRACT_ON_BASE, BASE_RPC_URL);
+const fee = await bridge.getBridgeFee(8472, '100');
+const result = await bridge.bridgeTo(privateKey, 8472, recipientAddress, '100');
+```
+
+| Chain | Role |
+|-------|------|
+| Base (8453) | Primary bridge hub — Across Protocol |
+| Arbitrum (42161) | L2 settlement layer |
+| Polygon (137) | High-throughput transactions |
+| Ethereum (1) | Institutional settlement |
+| BNB Chain (56) | Global accessibility |
+
+## Healthcare API (FHIR R4)
+
+```javascript
+const { MyRxHealthClient } = require('@myrxwallet/sdk');
+
+// Authenticate via SMART on FHIR (PKCE)
+const authUrl = MyRxHealthClient.buildAuthUrl({
+  clientId: 'your-client-id',
+  redirectUri: 'https://your-app.com/callback',
+  codeChallenge: codeChallenge,
+  scope: 'patient/*.read openid fhirUser',
+});
+
+// After redirect, exchange code for token
+const token = await MyRxHealthClient.exchangeCode({
+  code: authorizationCode,
+  clientId: 'your-client-id',
+  redirectUri: 'https://your-app.com/callback',
+  codeVerifier: codeVerifier,
+});
+
+// Access patient data
+const client = new MyRxHealthClient(token.access_token);
+const patient   = await client.getPatient(patientId);
+const meds      = await client.getMedications(patientId);
+const vitals    = await client.getObservations(patientId, 'vital-signs');
+const nfts      = await client.getNFTs(patientId);
+const score     = await client.getMyRxScore(patientId);
+```
+
+**FHIR Endpoint:** `https://ehr.myrxwallet.io/api/v1/fhir/r4/metadata`  
+**Standards:** HL7 FHIR R4 · US Core 6.1.0 · SMART App Launch 2.0.0 · Bulk Data 2.0.0  
+**Inferno Result:** 317/317 PASS (ONC (g)(10) certification baseline)
+
+## Validators
+
+Chain 8472 validator network secures federally-mandated patient health infrastructure.
+
+- **Phase 1 (2026):** 10–50 validators — founding team + DAO members + credentialed developers
+- **NFT-gated credentialing:** Validator rights tied to NFT tier (Founding/Provider/Community/Developer)
+- **DAO governance:** DAORX.IO — protocol parameters, emission schedules, validator standards
+
+```javascript
+// Get validator network status via raw RPC
+const provider = new Chain8472Provider();
+await provider.verify(); // confirms you're on Chain 8472
+
+// Full regulatory framework:
+// https://myrxwallet.io/docs/staking-validators-whitepaper.html
+```
+
+## Developer Portal
+
+Register for API keys and sandbox access:
+
+- **Developer Portal:** https://myrxwallet.io/developer.html
+- **Sandbox:** Instant keys prefixed `mrx_sb_`
+- **Production:** Manual review, prefixed `mrx_lv_`
+- **SMART App Registration:** `POST /api/v1/developer/register`
+
+## Compliance
+
+| Standard | Status |
+|----------|--------|
+| FHIR R4 / US Core 6.1.0 | ✅ Inferno 317/317 PASS |
+| SMART on FHIR 2.0.0 + PKCE | ✅ Live |
+| HIPAA Security Rule (45 CFR §164.312) | ✅ AES-256-GCM |
+| 21st Century Cures Act / ONC Interoperability Rule | ✅ Core requirement |
+| DEA EPCS (21 CFR Part 1311) | ✅ TOTP 2FA + audit log |
+| SEC Howey Test (MRT) | ✅ Prongs 3 & 4 not satisfied |
 
 ## License
-MIT — MyRxWallet North America Corporation 2026
+
+Apache 2.0 — MyRxWallet North America Corporation  
+CAGE: 9VNZ7 · UEI: RKYFJECN9GL3
+
+[myrxwallet.io](https://myrxwallet.io) · [compliance](https://myrxwallet.io/compliance.html) · [developer docs](https://myrxwallet.io/developer.html)
